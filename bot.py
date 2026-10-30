@@ -1,6 +1,5 @@
 import asyncio
 from telethon import TelegramClient, events
-from telethon.tl.types import ReplyKeyboardRemove
 from config import API_ID, API_HASH, BOT_TOKEN, is_authorized, get_main_keyboard
 from api_handler import send_api_request
 
@@ -9,19 +8,10 @@ async def start_handler(event):
         await event.respond("❌ Maaf, Anda tidak memiliki izin untuk mengakses bot ini.")
         return
 
-    # Menghilangkan keyboard bawah (Reply Keyboard) yang lama, lalu memunculkan inline keyboard
+    # Terus hantar panel kawalan dengan inline keyboard
     await event.respond(
         "👋 **Selamat datang di OpenWrt Advanced Control Bot!**\n"
         "Silakan gunakan tombol menu di bawah ini:",
-        buttons=[
-            ReplyKeyboardRemove(), # Perintah untuk menghapus keyboard bawah
-            *get_main_keyboard()    # Menyertakan inline keyboard
-        ] if isinstance(get_main_keyboard(), list) else get_main_keyboard()
-    )
-    
-    # Alternatif bersih jika menggunakan inline murni:
-    await event.respond(
-        "🎛️ **Panel Kontrol Utama OpenWrt:**",
         buttons=get_main_keyboard()
     )
 
