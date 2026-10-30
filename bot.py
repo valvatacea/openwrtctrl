@@ -1,6 +1,6 @@
 import os
 import asyncio
-import asyncssh
+import paramiko
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import ReplyKeyboardMarkup, KeyboardButtonRow, KeyboardButton
@@ -23,7 +23,7 @@ OPENWRT_USER = os.getenv("OPENWRT_USER", "root")
 OPENWRT_PASS = os.getenv("OPENWRT_PASS", "")
 
 # Inisialisasi Bot Client menggunakan Telethon
-bot = TelegramClient("openwrt_remote_bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+bot = TelegramClient("openwrt_paramiko_bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 def is_authorized(user_id):
     """Cek apakah user memiliki akses ke bot"""
@@ -31,21 +31,28 @@ def is_authorized(user_id):
         return True
     return user_id in ALLOWED_USERS
 
-async def run_ssh_command(cmd):
-    """Fungsi helper untuk menjalankan perintah jarak jauh via SSH ke OpenWrt"""
+def _sync_ssh_command(cmd):
+    """Fungsi sinkron untuk mengeksekusi SSH menggunakan Paramiko"""
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        async with asyncssh.connect(
-            OPENWRT_HOST, 
-            port=OPENWRT_PORT, 
-            username=OPENWRT_USER, 
-            password=OPENWRT_PASS, 
-            known_hosts=None
-        ) as conn:
-            result = await conn.run(cmd, check=False)
-            output = result.stdout.strip() or result.stderr.strip()
-            return output if output else "Perintah dieksekusi tanpa output."
+        ssh.connect(
+            hostname=OPENWRT_HOST,
+            port=OPENWRT_PORT,
+            username=OPENWRT_USER,
+            password=OPENWRT_PASS,
+            timeout=10
+        )
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        output = stdout.read().decode().strip() or stderr.read().decode().strip()
+        ssh.close()
+        return output if output else "Perintah dieksekusi tanpa output."
     except Exception as e:
         return f"Gagal terhubung ke OpenWrt via SSH: {str(e)}"
+
+async def run_ssh_command(cmd):
+    """Wrapper asinkron agar Paramiko tidak memblokir bot Telegram"""
+    return await asyncio.to_thread(_sync_ssh_command, cmd)
 
 # Tombol Menu Utama
 def get_main_keyboard():
@@ -71,7 +78,7 @@ async def start_handler(event):
         return
 
     await event.respond(
-        "👋 **Halo! Selamat datang di OpenWrt Remote Management Bot.**\n"
+        "👋 **Halo! Selamat datang di OpenWrt Remote Management Bot (Paramiko).**\n"
         "Gunakan tombol di bawah untuk mengontrol router OpenWrt Anda:",
         buttons=get_main_keyboard()
     )
@@ -110,11 +117,11 @@ async def handle_buttons(event):
 
     elif text == "♻️ Reboot OpenWrt":
         await event.respond("⚠️ Perintah reboot dikirim. Perangkat OpenWrt akan segera restart!")
-        # Menjalankan reboot di background agar koneksi SSH tidak menggantung (hang)
+        # Menjalankan reboot di background via thread terpisah
         asyncio.create_task(run_ssh_command("reboot"))
 
 def main():
-    print("Bot Remote OpenWrt sedang berjalan...")
+    print("Bot Remote OpenWrt (Paramiko) sedang berjalan...")
     bot.run_until_disconnected()
 
 if __name__ == "__main__":
