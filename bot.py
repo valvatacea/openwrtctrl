@@ -1,33 +1,30 @@
 import os
+import asyncio
 import requests
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.tl.types import ReplyKeyboardMarkup, KeyboardButtonRow, KeyboardButton
 
-# Muat variabel dari file .env
 load_dotenv()
 
 API_ID = int(os.getenv("API_ID", 0))
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 
-# Ambil daftar allowed users (bisa lebih dari satu, dipisahkan koma)
 raw_users = os.getenv("ALLOWED_USERS", "")
 ALLOWED_USERS = [int(uid.strip()) for uid in raw_users.split(",") if uid.strip().isdigit()]
 
 OPENWRT_API_URL = os.getenv("OPENWRT_API_URL", "http://192.168.1.1/cgi-bin/botapi")
 
-# Inisialisasi Bot Client menggunakan Telethon
-bot = TelegramClient("openwrt_http_bot", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+# Inisialisasi Bot Client tanpa langsung memanggil .start() di luar async
+bot = TelegramClient("openwrt_http_bot", API_ID, API_HASH)
 
 def is_authorized(user_id):
-    """Cek apakah user memiliki akses ke bot"""
     if not ALLOWED_USERS:
         return True
     return user_id in ALLOWED_USERS
 
 def send_api_request(action):
-    """Mengirim HTTP POST request ke server API OpenWrt"""
     try:
         response = requests.post(OPENWRT_API_URL, json={"action": action}, timeout=12)
         if response.status_code == 200:
@@ -38,7 +35,6 @@ def send_api_request(action):
     except Exception as e:
         return f"Gagal terhubung ke HTTP API OpenWrt: {str(e)}"
 
-# Tombol Menu Utama
 def get_main_keyboard():
     return ReplyKeyboardMarkup(
         row=[
@@ -76,9 +72,8 @@ async def handle_buttons(event):
     if text not in valid_texts:
         return
 
-    # Validasi akses user
     if not is_authorized(user_id):
-        await event.respond("❌ Akses ditolak. Anda bukan pengguna yang diizinkan.")
+        await event.respond("❌ Akses ditolak.")
         return
 
     if text == "📊 Status Sistem":
@@ -90,7 +85,7 @@ async def handle_buttons(event):
         await event.respond("⏳ Mengambil info interface...")
         output = send_api_request("interface")
         if len(output) > 4000:
-            output = output[:4000] + "\n\n...(dipotong karena terlalu panjang)"
+            output = output[:4000] + "\n\n...(dipotong)"
         await event.respond(f"🌐 **Interface Info:**\n```\n{output}\n```", buttons=get_main_keyboard())
 
     elif text == "🔄 Restart Network":
@@ -102,9 +97,11 @@ async def handle_buttons(event):
         await event.respond("⚠️ Perintah reboot dikirim ke router!")
         send_api_request("reboot")
 
-def main():
+async def main():
+    print("Memulai bot Telegram...")
+    await bot.start(bot_token=BOT_TOKEN)
     print("Bot Telegram HTTP API sedang berjalan...")
-    bot.run_until_disconnected()
+    await bot.run_until_disconnected()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
