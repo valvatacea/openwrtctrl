@@ -23,7 +23,8 @@ def is_authorized(user_id):
 
 def send_api_request(action):
     try:
-        response = requests.post(OPENWRT_API_URL, json={"action": action}, timeout=12)
+        # Mengirim sebagai parameter URL (GET / Query Parameters)
+        response = requests.get(OPENWRT_API_URL, params={"action": action}, timeout=12)
         if response.status_code == 200:
             data = response.json()
             return data.get("output", "Tidak ada output.")
