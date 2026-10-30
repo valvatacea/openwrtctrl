@@ -1,65 +1,16 @@
-import os
 import asyncio
-import requests
-from dotenv import load_dotenv
 from telethon import TelegramClient, events
-from telethon.tl.types import ReplyKeyboardMarkup, KeyboardButtonRow, KeyboardButton
-
-load_dotenv()
-
-API_ID = int(os.getenv("API_ID", 0))
-API_HASH = os.getenv("API_HASH", "")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-
-raw_users = os.getenv("ALLOWED_USERS", "")
-ALLOWED_USERS = [int(uid.strip()) for uid in raw_users.split(",") if uid.strip().isdigit()]
-
-OPENWRT_API_URL = os.getenv("OPENWRT_API_URL", "http://192.168.1.1/cgi-bin/botapi")
-
-def is_authorized(user_id):
-    if not ALLOWED_USERS:
-        return True
-    return user_id in ALLOWED_USERS
-
-def send_api_request(action):
-    try:
-        # Mengirim sebagai parameter URL (GET / Query Parameters)
-        response = requests.get(OPENWRT_API_URL, params={"action": action}, timeout=12)
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("output", "Tidak ada output.")
-        else:
-            return f"Error HTTP Status: {response.status_code}"
-    except Exception as e:
-        return f"Gagal terhubung ke HTTP API OpenWrt: {str(e)}"
-
-def get_main_keyboard():
-    return ReplyKeyboardMarkup(
-        rows=[
-            KeyboardButtonRow([
-                KeyboardButton("📊 Status Sistem"),
-                KeyboardButton("🌐 Info Interface")
-            ]),
-            KeyboardButtonRow([
-                KeyboardButton("🔄 Restart Network"),
-                KeyboardButton("♻️ Reboot OpenWrt")
-            ])
-        ],
-        resize=True
-    )
-
-# Variabel global untuk bot client
-bot = None
+from config import API_ID, API_HASH, BOT_TOKEN, is_authorized, get_main_keyboard
+from api_handler import send_api_request
 
 async def start_handler(event):
-    user_id = event.sender_id
-    if not is_authorized(user_id):
+    if not is_authorized(event.sender_id):
         await event.respond("❌ Maaf, Anda tidak memiliki izin untuk mengakses bot ini.")
         return
 
     await event.respond(
-        "👋 **Halo! Selamat datang di OpenWrt HTTP API Bot.**\n"
-        "Gunakan tombol di bawah untuk mengontrol router:",
+        "👋 **Selamat datang di OpenWrt Advanced Control Bot!**\n"
+        "Silakan pilih menu perintah di bawah ini:",
         buttons=get_main_keyboard()
     )
 
@@ -67,47 +18,44 @@ async def handle_buttons(event):
     user_id = event.sender_id
     text = event.raw_text
 
-    valid_texts = ["📊 Status Sistem", "🌐 Info Interface", "🔄 Restart Network", "♻️ Reboot OpenWrt"]
-    if text not in valid_texts:
+    valid_actions = {
+        "📊 Status Sistem": ("status", "⏳ Mengambil status sistem..."),
+        "🌐 Info Interface": ("interface", "⏳ Mengambil informasi interface..."),
+        "👥 Klien WiFi": ("wifi_clients", "⏳ Memindai perangkat klien WiFi yang terhubung..."),
+        "💽 Penyimpanan": ("storage", "⏳ Memeriksa kapasitas penyimpanan router..."),
+        "🔄 Restart Network": ("network_restart", "⏳ Merefresh layanan jaringan..."),
+    }
+
+    if text not in valid_actions and text != "♻️ Reboot OpenWrt":
         return
 
     if not is_authorized(user_id):
         await event.respond("❌ Akses ditolak.")
         return
 
-    if text == "📊 Status Sistem":
-        await event.respond("⏳ Mengambil status via HTTP API...")
-        output = send_api_request("status")
-        await event.respond(f"📊 **Status Sistem OpenWrt:**\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "🌐 Info Interface":
-        await event.respond("⏳ Mengambil info interface...")
-        output = send_api_request("interface")
-        if len(output) > 4000:
-            output = output[:4000] + "\n\n...(dipotong)"
-        await event.respond(f"🌐 **Interface Info:**\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "🔄 Restart Network":
-        await event.respond("🔄 Merefresh jaringan via HTTP API...")
-        output = send_api_request("network_restart")
-        await event.respond(f"✅ Selesai:\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "♻️ Reboot OpenWrt":
-        await event.respond("⚠️ Perintah reboot dikirim ke router!")
+    # Handle Khusus untuk Reboot dengan Konfirmasi Ekstra
+    if text == "♻️ Reboot OpenWrt":
+        await event.respond("⚠️ **Perhatian!** Perangkat OpenWrt akan segera melakukan reboot.", buttons=get_main_keyboard())
         send_api_request("reboot")
+        return
+
+    action_key, loading_text = valid_actions[text]
+    await event.respond(loading_text, buttons=get_main_keyboard())
+    
+    output = send_api_request(action_key)
+    if len(output) > 4000:
+        output = output[:4000] + "\n\n...(dipotong karena terlalu panjang)"
+        
+    await event.respond(f"📋 **Hasil ({text}):**\n```\n{output}\n```", buttons=get_main_keyboard())
 
 async def main():
-    global bot
-    # Inisialisasi client di dalam fungsi main (setelah event loop aktif)
-    bot = TelegramClient("openwrt_http_bot", API_ID, API_HASH)
-
-    # Daftarkan event handler
+    bot = TelegramClient("openwrt_modular_bot", API_ID, API_HASH)
+    
     bot.add_event_handler(start_handler, events.NewMessage(pattern="/start"))
     bot.add_event_handler(handle_buttons, events.NewMessage)
 
-    print("Memulai bot Telegram...")
+    print("🤖 Bot Telegram Modular OpenWrt sedang berjalan...")
     await bot.start(bot_token=BOT_TOKEN)
-    print("Bot Telegram HTTP API sedang berjalan...")
     await bot.run_until_disconnected()
 
 if __name__ == "__main__":
