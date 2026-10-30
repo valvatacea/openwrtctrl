@@ -14,47 +14,58 @@ async def start_handler(event):
         buttons=get_main_keyboard()
     )
 
-async def handle_buttons(event):
+async def handle_inline_buttons(event):
     user_id = event.sender_id
-    text = event.raw_text
+    
+    if not is_authorized(user_id):
+        await event.answer("❌ Akses ditolak.", alert=True)
+        return
 
-    valid_actions = {
-        "📊 Status Sistem": ("status", "⏳ Mengambil status sistem..."),
-        "🌐 Info Interface": ("interface", "⏳ Mengambil informasi interface..."),
-        "👥 Klien WiFi": ("wifi_clients", "⏳ Memindai perangkat klien WiFi yang terhubung..."),
-        "💽 Penyimpanan": ("storage", "⏳ Memeriksa kapasitas penyimpanan router..."),
-        "🔄 Restart Network": ("network_restart", "⏳ Merefresh layanan jaringan..."),
+    # Ambil data *callback* dari tombol yang ditekan
+    action_bytes = event.data
+    action_key = action_bytes.decode("utf-8")
+
+    action_labels = {
+        "status": "📊 Status Sistem",
+        "interface": "🌐 Info Interface",
+        "wifi_clients": "👥 Klien WiFi",
+        "storage": "💽 Penyimpanan",
+        "network_restart": "🔄 Restart Network",
+        "reboot": "♻️ Reboot OpenWrt"
     }
 
-    if text not in valid_actions and text != "♻️ Reboot OpenWrt":
-        return
+    label = action_labels.get(action_key, "Perintah")
 
-    if not is_authorized(user_id):
-        await event.respond("❌ Akses ditolak.")
-        return
-
-    # Handle Khusus untuk Reboot dengan Konfirmasi Ekstra
-    if text == "♻️ Reboot OpenWrt":
-        await event.respond("⚠️ **Perhatian!** Perangkat OpenWrt akan segera melakukan reboot.", buttons=get_main_keyboard())
+    if action_key == "reboot":
+        await event.answer("⚠️ Perintah reboot dikirim ke router!", alert=True)
         send_api_request("reboot")
+        await event.edit(
+            f"⚠️ **Perhatian!** Perangkat OpenWrt sedang melakukan reboot.",
+            buttons=get_main_keyboard()
+        )
         return
 
-    action_key, loading_text = valid_actions[text]
-    await event.respond(loading_text, buttons=get_main_keyboard())
+    await event.answer(f"Memproses {label}...")
     
+    # Ambil data dari API OpenWrt
     output = send_api_request(action_key)
     if len(output) > 4000:
         output = output[:4000] + "\n\n...(dipotong karena terlalu panjang)"
         
-    await event.respond(f"📋 **Hasil ({text}):**\n```\n{output}\n```", buttons=get_main_keyboard())
+    # Edit pesan yang ada dengan hasil dari router dan sertakan kembali tombolnya
+    await event.edit(
+        f"📋 **Hasil ({label}):**\n```\n{output}\n```",
+        buttons=get_main_keyboard()
+    )
 
 async def main():
     bot = TelegramClient("openwrt_modular_bot", API_ID, API_HASH)
     
     bot.add_event_handler(start_handler, events.NewMessage(pattern="/start"))
-    bot.add_event_handler(handle_buttons, events.NewMessage)
+    # Menggunakan CallbackQuery untuk mendeteksi klik Inline Button
+    bot.add_event_handler(handle_inline_buttons, events.CallbackQuery)
 
-    print("🤖 Bot Telegram Modular OpenWrt sedang berjalan...")
+    print("🤖 Bot Telegram Inline Keyboard OpenWrt sedang berjalan...")
     await bot.start(bot_token=BOT_TOKEN)
     await bot.run_until_disconnected()
 
