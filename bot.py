@@ -1,5 +1,6 @@
 import asyncio
 from telethon import TelegramClient, events
+from telethon.tl.types import ReplyKeyboardRemove
 from config import API_ID, API_HASH, BOT_TOKEN, is_authorized, get_main_keyboard
 from api_handler import send_api_request
 
@@ -8,9 +9,19 @@ async def start_handler(event):
         await event.respond("❌ Maaf, Anda tidak memiliki izin untuk mengakses bot ini.")
         return
 
+    # Menghilangkan keyboard bawah (Reply Keyboard) yang lama, lalu memunculkan inline keyboard
     await event.respond(
         "👋 **Selamat datang di OpenWrt Advanced Control Bot!**\n"
-        "Silakan pilih menu perintah di bawah ini:",
+        "Silakan gunakan tombol menu di bawah ini:",
+        buttons=[
+            ReplyKeyboardRemove(), # Perintah untuk menghapus keyboard bawah
+            *get_main_keyboard()    # Menyertakan inline keyboard
+        ] if isinstance(get_main_keyboard(), list) else get_main_keyboard()
+    )
+    
+    # Alternatif bersih jika menggunakan inline murni:
+    await event.respond(
+        "🎛️ **Panel Kontrol Utama OpenWrt:**",
         buttons=get_main_keyboard()
     )
 
@@ -21,7 +32,6 @@ async def handle_inline_buttons(event):
         await event.answer("❌ Akses ditolak.", alert=True)
         return
 
-    # Ambil data *callback* dari tombol yang ditekan
     action_bytes = event.data
     action_key = action_bytes.decode("utf-8")
 
@@ -47,12 +57,10 @@ async def handle_inline_buttons(event):
 
     await event.answer(f"Memproses {label}...")
     
-    # Ambil data dari API OpenWrt
     output = send_api_request(action_key)
     if len(output) > 4000:
         output = output[:4000] + "\n\n...(dipotong karena terlalu panjang)"
         
-    # Edit pesan yang ada dengan hasil dari router dan sertakan kembali tombolnya
     await event.edit(
         f"📋 **Hasil ({label}):**\n```\n{output}\n```",
         buttons=get_main_keyboard()
@@ -62,7 +70,6 @@ async def main():
     bot = TelegramClient("openwrt_modular_bot", API_ID, API_HASH)
     
     bot.add_event_handler(start_handler, events.NewMessage(pattern="/start"))
-    # Menggunakan CallbackQuery untuk mendeteksi klik Inline Button
     bot.add_event_handler(handle_inline_buttons, events.CallbackQuery)
 
     print("🤖 Bot Telegram Inline Keyboard OpenWrt sedang berjalan...")
