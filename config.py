@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from telethon.tl.types import ReplyKeyboardMarkup, KeyboardButtonRow, KeyboardButton
+from telethon import Button
 
 load_dotenv()
 
@@ -17,22 +17,19 @@ def is_authorized(user_id):
         return True
     return user_id in ALLOWED_USERS
 
-# Menu Utama Interaktif
+# Membuat Inline Keyboard yang menempel di dalam pesan
 def get_main_keyboard():
-    return ReplyKeyboardMarkup(
-        rows=[
-            KeyboardButtonRow([
-                KeyboardButton("📊 Status Sistem"),
-                KeyboardButton("🌐 Info Interface")
-            ]),
-            KeyboardButtonRow([
-                KeyboardButton("👥 Klien WiFi"),
-                KeyboardButton("💽 Penyimpanan")
-            ]),
-            KeyboardButtonRow([
-                KeyboardButton("🔄 Restart Network"),
-                KeyboardButton("♻️ Reboot OpenWrt")
-            ])
+    return [
+        [
+            Button.inline("📊 Status Sistem", b"status"),
+            Button.inline("🌐 Info Interface", b"interface")
         ],
-        resize=True
-    )
+        [
+            Button.inline("👥 Klien WiFi", b"wifi_clients"),
+            Button.inline("💽 Penyimpanan", b"storage")
+        ],
+        [
+            Button.inline("🔄 Restart Network", b"network_restart"),
+            Button.inline("♻️ Reboot OpenWrt", b"reboot")
+        ]
+    ]
