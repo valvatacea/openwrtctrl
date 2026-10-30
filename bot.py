@@ -34,7 +34,7 @@ def send_api_request(action):
 
 def get_main_keyboard():
     return ReplyKeyboardMarkup(
-        row=[
+        rows=[
             KeyboardButtonRow([
                 KeyboardButton("📊 Status Sistem"),
                 KeyboardButton("🌐 Info Interface")
