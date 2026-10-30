@@ -1,2 +1,3 @@
-telethon1.36.0
-python-dotenv1.0.1
+telethon
+python-dotenv
+asyncssh
