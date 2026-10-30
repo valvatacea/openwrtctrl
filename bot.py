@@ -16,9 +16,6 @@ ALLOWED_USERS = [int(uid.strip()) for uid in raw_users.split(",") if uid.strip()
 
 OPENWRT_API_URL = os.getenv("OPENWRT_API_URL", "http://192.168.1.1/cgi-bin/botapi")
 
-# Inisialisasi Bot Client tanpa langsung memanggil .start() di luar async
-bot = TelegramClient("openwrt_http_bot", API_ID, API_HASH)
-
 def is_authorized(user_id):
     if not ALLOWED_USERS:
         return True
@@ -50,7 +47,9 @@ def get_main_keyboard():
         resize=True
     )
 
-@bot.on(events.NewMessage(pattern="/start"))
+# Variabel global untuk bot client
+bot = None
+
 async def start_handler(event):
     user_id = event.sender_id
     if not is_authorized(user_id):
@@ -63,45 +62,9 @@ async def start_handler(event):
         buttons=get_main_keyboard()
     )
 
-@bot.on(events.NewMessage)
 async def handle_buttons(event):
     user_id = event.sender_id
     text = event.raw_text
 
     valid_texts = ["📊 Status Sistem", "🌐 Info Interface", "🔄 Restart Network", "♻️ Reboot OpenWrt"]
-    if text not in valid_texts:
-        return
-
-    if not is_authorized(user_id):
-        await event.respond("❌ Akses ditolak.")
-        return
-
-    if text == "📊 Status Sistem":
-        await event.respond("⏳ Mengambil status via HTTP API...")
-        output = send_api_request("status")
-        await event.respond(f"📊 **Status Sistem OpenWrt:**\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "🌐 Info Interface":
-        await event.respond("⏳ Mengambil info interface...")
-        output = send_api_request("interface")
-        if len(output) > 4000:
-            output = output[:4000] + "\n\n...(dipotong)"
-        await event.respond(f"🌐 **Interface Info:**\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "🔄 Restart Network":
-        await event.respond("🔄 Merefresh jaringan via HTTP API...")
-        output = send_api_request("network_restart")
-        await event.respond(f"✅ Selesai:\n```\n{output}\n```", buttons=get_main_keyboard())
-
-    elif text == "♻️ Reboot OpenWrt":
-        await event.respond("⚠️ Perintah reboot dikirim ke router!")
-        send_api_request("reboot")
-
-async def main():
-    print("Memulai bot Telegram...")
-    await bot.start(bot_token=BOT_TOKEN)
-    print("Bot Telegram HTTP API sedang berjalan...")
-    await bot.run_until_disconnected()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    if text not in valid_
